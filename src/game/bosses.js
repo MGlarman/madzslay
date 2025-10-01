@@ -2,8 +2,10 @@
 import enemyBossSprite from "../assets/bosses/enemyBoss.png";
 import enemyBossRedSprite from "../assets/bosses/enemyBossRed.png";
 import enemyBossRedAttackSprite from "../assets/bosses/enemyBossRedAttacking.png";
+import enemyBossCrystalSprite from "../assets/bosses/crystalBoss.png";
+import enemyBossCrystalAttackSprite from "../assets/bosses/crystalBossAttacking.png";
 
-//object of objects with boss types
+// -------------------- Boss Types --------------------
 const enemyBossTypes = {
   jellyfishBoss: {
     sprite: enemyBossSprite,
@@ -26,9 +28,20 @@ const enemyBossTypes = {
     range: 500,
     cooldown: 60,
   },
+  crystalBoss: {
+    sprite: enemyBossCrystalSprite,
+    attackSprite: enemyBossCrystalAttackSprite,
+    size: 120,
+    hp: 900,
+    speed: 1.4,
+    attackType: "melee", // this one will chase player and deal close-range dmg
+    damage: 20,
+    range: 100,
+    cooldown: 90,
+  }
 };
 
-// Preload images
+// -------------------- Preload Images --------------------
 const loadImage = (src) => {
   const img = new Image();
   img.src = src;
@@ -105,7 +118,7 @@ export class Boss {
     this.x += (dx / dist) * this.speed;
     this.y += (dy / dist) * this.speed;
 
-    // Ranged attack
+    // Handle attacks
     if (this.attackType === "ranged") {
       if (this.cooldownTimer > 0) this.cooldownTimer--;
       if (dist < this.range && this.cooldownTimer <= 0) {
@@ -113,18 +126,23 @@ export class Boss {
         const vy = dy / dist;
         projectiles.push(new Projectile(this.x, this.y, vx, vy, 6, 10, this.damage));
         this.cooldownTimer = this.cooldown;
-
-        // Trigger attack animation
-        this.attackTimer = 10; // show attack sprite for 10 frames
+        this.attackTimer = 10; // show attack sprite
+      }
+    } else if (this.attackType === "melee") {
+      if (this.cooldownTimer > 0) this.cooldownTimer--;
+      if (dist < this.range && this.cooldownTimer <= 0) {
+        // Melee just directly damages the player
+        player.hp -= this.damage;
+        if (player.hp < 0) player.hp = 0;
+        this.cooldownTimer = this.cooldown;
+        this.attackTimer = 10;
       }
     }
 
-    // Reduce attack animation timer
     if (this.attackTimer > 0) this.attackTimer--;
   }
 
   draw(ctx) {
-    // Choose sprite
     const spriteToDraw = this.attackTimer > 0 && this.attackSprite ? this.attackSprite : this.sprite;
 
     if (spriteToDraw && spriteToDraw.complete && spriteToDraw.naturalWidth > 0) {
@@ -134,7 +152,6 @@ export class Boss {
       ctx.drawImage(spriteToDraw, -this.size, -this.size, this.size * 2, this.size * 2);
       ctx.restore();
     } else {
-      // fallback circle
       ctx.fillStyle = "purple";
       ctx.beginPath();
       ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
@@ -177,7 +194,6 @@ export class BossManager {
   }
 
   update(player) {
-    // Update bosses
     this.bosses = this.bosses.filter(boss => {
       boss.update(player, this.projectiles);
       if (boss.hp <= 0) {
@@ -187,7 +203,6 @@ export class BossManager {
       return true;
     });
 
-    // Update projectiles
     this.projectiles = this.projectiles.filter(p => {
       p.update();
       if (p.collides(player)) {
@@ -195,8 +210,10 @@ export class BossManager {
         if (player.hp < 0) player.hp = 0;
         return false;
       }
-      return p.x >= -20 && p.x <= this.canvasWidth + 20 &&
-             p.y >= -20 && p.y <= this.canvasHeight + 20;
+      return (
+        p.x >= -20 && p.x <= this.canvasWidth + 20 &&
+        p.y >= -20 && p.y <= this.canvasHeight + 20
+      );
     });
   }
 

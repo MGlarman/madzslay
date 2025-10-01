@@ -372,6 +372,11 @@ const clickedEnemy = enemies.enemies.concat(bosses.bosses).find((enemy) => {
           spawnedBosses.current.push("redBoss");
         }
 
+          if (killsRef.current >= 40 && !spawnedBosses.current.includes("crystalBoss")) {
+          bosses.spawnBoss("crystalBoss");
+          spawnedBosses.current.push("crystalBoss");
+        }
+
         // Projectiles
         const killedByProjectile = projectiles.updateAndDraw(ctx, enemies.enemies.concat(bosses.bosses));
         if (killedByProjectile > 0) {
