@@ -11,6 +11,8 @@ import { BossManager } from "../game/bosses";
 import backgroundTile from "../assets/background/tile.png";
 import { usePlayerInput } from "./usePlayerInput";
 import { updatePlayerPosition, handleDeath } from "../game/helpers";
+import { Pet } from "../game/pet";
+
 
 export function useGameLoop(canvasRef, selectedCharacter, gameStarted, setGameStarted) {
   const initialized = useRef(false);
@@ -33,6 +35,8 @@ export function useGameLoop(canvasRef, selectedCharacter, gameStarted, setGameSt
   const projectilesRef = useRef(null);
   const bloodEffectsRef = useRef(null);
   const skillEffectsRef = useRef(null);
+  const petRef = useRef(null);
+
 
   // Boss milestone tracking
   const spawnedBosses = useRef([]);
@@ -84,6 +88,10 @@ export function useGameLoop(canvasRef, selectedCharacter, gameStarted, setGameSt
     if (!initialized.current && gameStarted) {
       const player = createPlayer(selectedCharacter, canvas.width, canvas.height);
       playerRef.current = player;
+        // Create pet that follows player
+      const pet = new Pet(player, projectiles);
+      petRef.current = pet;
+
 
       const obstacles = [];
       const obstacleKeys = Object.keys(spriteMap);
@@ -126,12 +134,18 @@ export function useGameLoop(canvasRef, selectedCharacter, gameStarted, setGameSt
         bloodEffects.draw(ctx);
       } else if (playerRef.current) {
         const player = playerRef.current;
+        const pet = petRef.current;
 
         // ------------------------------
         // UPDATE STEP
         // ------------------------------
+
+        //update player
         player.mana = Math.min(player.maxMana, player.mana + player.manaRegen);
         updatePlayerPosition(player, obstaclesRef.current, movingRef, moveTargetRef);
+
+        //update pet
+        if (pet) pet.update();
 
         if (shootingRef.current && targetEnemyRef.current && shootCooldown <= 0) {
           projectiles.shoot(player.x, player.y, targetEnemyRef.current.x, targetEnemyRef.current.y, 12, "yellow");
@@ -180,6 +194,8 @@ export function useGameLoop(canvasRef, selectedCharacter, gameStarted, setGameSt
         bosses.draw(ctx);
         enemies.draw(ctx);
         player.draw(ctx);
+        petRef.current.draw(ctx);
+
 
         if (player.hoveringEnemy) {
           ctx.strokeStyle = "yellow";
@@ -255,6 +271,7 @@ export function useGameLoop(canvasRef, selectedCharacter, gameStarted, setGameSt
     return () => {
       cancelAnimationFrame(animationFrameId);
       playerRef.current = null;
+      petRef.current = null;
       skillsRef.current = null;
       obstaclesRef.current = [];
       enemiesRef.current = null;
