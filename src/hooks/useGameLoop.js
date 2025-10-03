@@ -14,7 +14,6 @@ import { updatePlayerPosition, handleDeath } from "../game/helpers";
 
 export function useGameLoop(canvasRef, selectedCharacter, gameStarted, setGameStarted) {
   const initialized = useRef(false);
-  const deathTimeout = useRef(null);
   const deathStart = useRef(null);
   const startTimeRef = useRef(null);
   const bgImage = useRef(new Image());
@@ -35,7 +34,13 @@ export function useGameLoop(canvasRef, selectedCharacter, gameStarted, setGameSt
   const bloodEffectsRef = useRef(null);
   const skillEffectsRef = useRef(null);
 
+  // Boss milestone tracking
   const spawnedBosses = useRef([]);
+  const bossMilestones = [
+    { kills: 10, type: "jellyfishBoss" },
+    { kills: 20, type: "redBoss" },
+    { kills: 30, type: "crystalBoss" },
+  ];
 
   const { movingRef, moveTargetRef, shootingRef, targetEnemyRef } = usePlayerInput({
     canvasRef,
@@ -50,6 +55,14 @@ export function useGameLoop(canvasRef, selectedCharacter, gameStarted, setGameSt
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
+
+    // Reset counters on new game
+    if (gameStarted && !initialized.current) {
+      killsRef.current = 0;
+      setKills(0);
+      startTimeRef.current = Date.now();
+      setElapsed(0);
+    }
 
     // Initialize managers
     const enemies = new EnemyManager(canvas.width, canvas.height);
@@ -80,8 +93,11 @@ export function useGameLoop(canvasRef, selectedCharacter, gameStarted, setGameSt
         while (!safe) {
           const x = Math.random() * (canvas.width - 64);
           const y = Math.random() * (canvas.height - 64);
-          const overlaps = x < canvas.width / 2 + player.size && x + 64 > canvas.width / 2 - player.size &&
-                           y < canvas.height / 2 + player.size && y + 64 > canvas.height / 2 - player.size;
+          const overlaps =
+            x < canvas.width / 2 + player.size &&
+            x + 64 > canvas.width / 2 - player.size &&
+            y < canvas.height / 2 + player.size &&
+            y + 64 > canvas.height / 2 - player.size;
           if (!overlaps) {
             const spriteKey = obstacleKeys[Math.floor(Math.random() * obstacleKeys.length)];
             ob = new Obstacle(x, y, 64, 64, { sprite: spriteKey });
@@ -114,43 +130,44 @@ export function useGameLoop(canvasRef, selectedCharacter, gameStarted, setGameSt
         // ------------------------------
         // UPDATE STEP
         // ------------------------------
-
-        // Mana regen
         player.mana = Math.min(player.maxMana, player.mana + player.manaRegen);
-
-        // Player movement
         updatePlayerPosition(player, obstaclesRef.current, movingRef, moveTargetRef);
 
-        // Shooting
         if (shootingRef.current && targetEnemyRef.current && shootCooldown <= 0) {
           projectiles.shoot(player.x, player.y, targetEnemyRef.current.x, targetEnemyRef.current.y, 12, "yellow");
           shootCooldown = 20;
         }
         if (shootCooldown > 0) shootCooldown--;
 
-        // AI
         enemies.update(player, obstaclesRef.current);
         bosses.update(player);
 
-        // Projectiles & Skills
         const allTargets = enemies.enemies.concat(bosses.bosses);
         const killedByProjectiles = projectiles.update(allTargets, ctx);
         const killedBySkills = skillEffects.update(allTargets);
 
+        // Update kills
         const totalKills = killedByProjectiles + killedBySkills;
         if (totalKills > 0) {
           killsRef.current += totalKills;
           setKills(killsRef.current);
         }
 
-        // Skills cooldowns
+        // ------------------------------
+        // Boss spawning based on milestones
+        // ------------------------------
+        bossMilestones.forEach(({ kills, type }) => {
+          if (killsRef.current >= kills && !spawnedBosses.current.includes(type)) {
+            bosses.spawnBoss(type);
+            spawnedBosses.current.push(type);
+          }
+        });
+
         skillsRef.current.updateCooldowns();
 
         // ------------------------------
         // RENDER STEP
         // ------------------------------
-
-        // Background tiles
         for (let x = 0; x < canvas.width; x += 254) {
           for (let y = 0; y < canvas.height; y += 254) {
             ctx.drawImage(bgImage.current, x, y, 254, 254);
@@ -173,7 +190,7 @@ export function useGameLoop(canvasRef, selectedCharacter, gameStarted, setGameSt
         }
 
         // ------------------------------
-        // SPAWN STEP
+        // SPAWN ENEMIES
         // ------------------------------
         spawnTimer++;
         if (spawnTimer > 120) {
@@ -213,13 +230,21 @@ export function useGameLoop(canvasRef, selectedCharacter, gameStarted, setGameSt
             skillEffectsRef.current = null;
             bossesRef.current = null;
             setGameStarted(false);
-            deathTimeout.current = null;
             deathStart.current = null;
+            spawnedBosses.current = [];
+
+            // Reset counters after death
+            killsRef.current = 0;
+            setKills(0);
+            startTimeRef.current = null;
+            setElapsed(0);
           }
         });
 
-        if (!startTimeRef.current) startTimeRef.current = Date.now();
-        setElapsed(Math.floor((Date.now() - startTimeRef.current) / 1000));
+        // Update elapsed timer
+        if (startTimeRef.current) {
+          setElapsed(Math.floor((Date.now() - startTimeRef.current) / 1000));
+        }
       }
 
       animationFrameId = requestAnimationFrame(loop);
@@ -228,9 +253,7 @@ export function useGameLoop(canvasRef, selectedCharacter, gameStarted, setGameSt
     loop();
 
     return () => {
-      if (deathTimeout.current) clearTimeout(deathTimeout.current);
       cancelAnimationFrame(animationFrameId);
-
       playerRef.current = null;
       skillsRef.current = null;
       obstaclesRef.current = [];
@@ -238,7 +261,9 @@ export function useGameLoop(canvasRef, selectedCharacter, gameStarted, setGameSt
       projectilesRef.current = null;
       bloodEffectsRef.current = null;
       skillEffectsRef.current = null;
+      bossesRef.current = null;
       initialized.current = false;
+      spawnedBosses.current = [];
     };
   }, [canvasRef, selectedCharacter, gameStarted, setGameStarted]);
 

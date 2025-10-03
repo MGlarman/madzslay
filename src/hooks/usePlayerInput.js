@@ -1,11 +1,32 @@
 import { useEffect, useRef } from "react";
 
-export function usePlayerInput({ canvasRef, playerRef, enemiesRef, bossesRef, skillsRef, gameStarted }) {
+export function usePlayerInput({
+  canvasRef,
+  playerRef,
+  enemiesRef,
+  bossesRef,
+  skillsRef,
+  gameStarted,
+}) {
   // --- Refs for movement/shooting state ---
   const movingRef = useRef(false);
   const moveTargetRef = useRef(null);
   const shootingRef = useRef(false);
   const targetEnemyRef = useRef(null);
+
+  // --- Unified skill casting function (works for keyboard + UI buttons) ---
+  const castSkill = (key) => {
+    const player = playerRef.current;
+    const skills = skillsRef.current;
+    if (!gameStarted || !player || player.hp <= 0) return;
+
+    const mouseX = player.hoverX || player.x;
+    const mouseY = player.hoverY || player.y;
+
+    if (["q", "w", "e", "r"].includes(key.toLowerCase())) {
+      skills.cast(key.toLowerCase(), mouseX, mouseY);
+    }
+  };
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -22,16 +43,7 @@ export function usePlayerInput({ canvasRef, playerRef, enemiesRef, bossesRef, sk
     };
 
     const handleKeyDown = (e) => {
-      const player = playerRef.current;
-      const skills = skillsRef.current;
-      if (!gameStarted || !player || player.hp <= 0) return;
-
-      const mouseX = player.hoverX || player.x;
-      const mouseY = player.hoverY || player.y;
-
-      if (["q", "w", "e", "r"].includes(e.key.toLowerCase())) {
-        skills.cast(e.key.toLowerCase(), mouseX, mouseY);
-      }
+      castSkill(e.key);
     };
 
     const handleMove = (x, y) => {
@@ -43,7 +55,9 @@ export function usePlayerInput({ canvasRef, playerRef, enemiesRef, bossesRef, sk
       player.hoverX = x;
       player.hoverY = y;
 
-      if (movingRef.current && !shootingRef.current) moveTargetRef.current = { x, y };
+      if (movingRef.current && !shootingRef.current) {
+        moveTargetRef.current = { x, y };
+      }
     };
 
     const handleMouseMove = (e) => {
@@ -136,5 +150,6 @@ export function usePlayerInput({ canvasRef, playerRef, enemiesRef, bossesRef, sk
     moveTargetRef,
     shootingRef,
     targetEnemyRef,
+    castSkill, // ✅ now available for on-screen UI
   };
 }
